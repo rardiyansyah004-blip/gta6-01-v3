@@ -1,6 +1,25 @@
-[
-  { "name": "1-chase.jpg", "query": "?shot=chase&seed=7" },
-  { "name": "2-race.jpg", "query": "?shot=race&seed=7" },
-  { "name": "3-city.jpg", "query": "?shot=city&seed=7" },
-  { "name": "4-title.jpg", "query": "?shot=title&seed=7" }
-]
+{
+  "note": "Staged screenshot scenes for the v4 entry of the GTA 6 fan-made web experience — each scene is captured via its query string with seed 7.",
+  "shots": [
+    {
+      "name": "1-chase.jpg",
+      "note": "5-star wanted chase with Air One helicopter, full crew, Crown District standing 82, car damage smoke, mission objective and minimap route.",
+      "query": "?shot=chase&seed=7"
+    },
+    {
+      "name": "2-race.jpg",
+      "note": "Street Kings race with Rico/Dex crew, Neon Mile standing 72, live P1-P4 standings.",
+      "query": "?shot=race&seed=7"
+    },
+    {
+      "name": "3-city.jpg",
+      "note": "Lena on foot with the full crew, standing 68 Respected, crew line on the HUD.",
+      "query": "?shot=city&seed=7"
+    },
+    {
+      "name": "4-title.jpg",
+      "note": "Title screen with 3 chapters, the crew, and lived-in save slots.",
+      "query": "?shot=title&seed=7"
+    }
+  ]
+}
