@@ -98,6 +98,11 @@ window.__debug = {
   setWanted: (n) => { G.player.heat = [0, 10, 25, 45, 65, 85][n] || 0; G.player.lastCrime = G.time; return G.player.wanted; },
   giveMoney: (n) => { G.player.money += n; return G.player.money; },
   teleport: (x, y) => { G.player.x = x; G.player.y = y; return true; },
+  nearestCar: () => {
+    let best = null; let bd = 1e9;
+    for (const c of G.traffic) { const d = Math.hypot(c.x - G.player.x, c.y - G.player.y); if (d < bd) { bd = d; best = c; } }
+    return best ? { d: Math.round(bd), x: Math.round(best.x), y: Math.round(best.y) } : null;
+  },
   hurt: (n) => { hurtPlayer(G, n); return G.player.health; },
   state: () => readDebug(),
 };
