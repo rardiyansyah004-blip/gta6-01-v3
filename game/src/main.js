@@ -211,16 +211,19 @@ function runGame() {
         startMission(G, n - 1);
         G.overlay = null;
         audio.ensure(); audio.pickup();
-      } else if (e.code === 'KeyJ' || e.code === 'Escape') G.overlay = null;
+      }
+      // J toggles the menu (its own listener below); Esc/P closes it via
+      // handleActions — never close here, or the same keypress pauses the game.
     } else if (G.overlay === 'shop') {
       const n = Number.parseInt(e.key, 10);
       if (n >= 1 && n <= 3) announce(buyWeapon(G, n - 1));
       else if (e.code === 'KeyA') announce(buyAmmo(G));
       else if (e.code === 'KeyV') announce(buyArmor(G));
-      else if (e.code === 'KeyB' || e.code === 'Escape') G.overlay = null;
+      // B / Esc close the shop — handled by handleActions (ACTION_BUY /
+      // ACTION_PAUSE). Closing here too would reopen it next frame.
     } else if (G.overlay === 'garage') {
       if (e.code === 'KeyG') announce(buyTune(G));
-      else if (e.code === 'Escape') G.overlay = null;
+      // Esc closes — handled by handleActions.
     }
   }
   window.addEventListener('keydown', handleOverlayKeys);
