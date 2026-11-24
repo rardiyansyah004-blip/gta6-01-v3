@@ -18,7 +18,7 @@ function farPoint(G, minDist = 700) {
 function spawnHostiles(G, n, near) {
   for (let i = 0; i < n; i += 1) {
     const a = G.rng.range(0, Math.PI * 2);
-    G.hostiles.push({ x: near.x + Math.cos(a) * G.rng.range(120, 220), y: near.y + Math.sin(a) * G.rng.range(120, 220), hp: 3, shootCd: G.rng.range(0.5, 1.5) });
+    G.hostiles.push({ x: near.x + Math.cos(a) * G.rng.range(120, 220), y: near.y + Math.sin(a) * G.rng.range(120, 220), hp: 2, shootCd: G.rng.range(0.5, 1.9) });
   }
 }
 function updateHostiles(G, dt) {
@@ -30,9 +30,9 @@ function updateHostiles(G, dt) {
     else if (d < 120) { h.x -= (dx / d) * 60 * dt; h.y -= (dy / d) * 60 * dt; }
     h.shootCd -= dt;
     if (h.shootCd <= 0 && d < 320) {
-      h.shootCd = 1.6;
+      h.shootCd = 1.9;
       G.effects.push({ type: 'muzzle', x: h.x, y: h.y, t: 0.08, angle: Math.atan2(dy, dx) });
-      if (G.rng.chance(0.45)) hurtPlayer(G, 5);
+      if (G.rng.chance(0.4)) hurtPlayer(G, 5);
     }
   }
 }
@@ -147,7 +147,7 @@ const MISSIONS = [
       if (G.hostiles.length === 0) {
         m.wave += 1;
         if (m.wave >= 3) return 'done';
-        spawnHostiles(G, 3 + m.wave, { x: 3000, y: 2400 });
+        spawnHostiles(G, 4, { x: 3000, y: 2400 });
         m.text = `Wave ${m.wave + 1} of 3 — hold the yard`;
         dispatch(G, `Harbor Heat: wave ${m.wave + 1} incoming`);
       }

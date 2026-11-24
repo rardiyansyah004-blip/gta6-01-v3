@@ -249,7 +249,7 @@ export function createRenderer(canvas) {
       ctx.fillStyle = '#111';
       ctx.fillRect(h.x - 8, h.y - 14, 16, 3);
       ctx.fillStyle = '#ff6b6b';
-      ctx.fillRect(h.x - 8, h.y - 14, 16 * (h.hp / 3), 3);
+      ctx.fillRect(h.x - 8, h.y - 14, 16 * (h.hp / 2), 3);
     }
     for (const f of G.footCops) {
       ctx.fillStyle = '#2f6fed';
