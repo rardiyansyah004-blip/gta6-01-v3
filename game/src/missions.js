@@ -18,7 +18,10 @@ function farPoint(G, minDist = 700) {
 function spawnHostiles(G, n, near) {
   for (let i = 0; i < n; i += 1) {
     const a = G.rng.range(0, Math.PI * 2);
-    G.hostiles.push({ x: near.x + Math.cos(a) * G.rng.range(120, 220), y: near.y + Math.sin(a) * G.rng.range(120, 220), hp: 2, shootCd: G.rng.range(0.5, 1.9) });
+    // Each hostile is anchored to its post: it engages near the post and
+    // walks back to it when the player leaves, so the fight stays where the
+    // mission says it is instead of wandering across the city.
+    G.hostiles.push({ x: near.x + Math.cos(a) * G.rng.range(120, 220), y: near.y + Math.sin(a) * G.rng.range(120, 220), ax: near.x, ay: near.y, hp: 2, shootCd: G.rng.range(0.5, 1.9) });
   }
 }
 function updateHostiles(G, dt) {
@@ -26,7 +29,11 @@ function updateHostiles(G, dt) {
   for (const h of [...G.hostiles]) {
     const dx = p.x - h.x, dy = p.y - h.y;
     const d = Math.hypot(dx, dy) || 1;
-    if (d > 260) { h.x += (dx / d) * 120 * dt; h.y += (dy / d) * 120 * dt; }
+    if (d > 320) { // too far from the player: walk back to the post
+      const adx = h.ax - h.x, ady = h.ay - h.y;
+      const ad = Math.hypot(adx, ady) || 1;
+      if (ad > 30) { h.x += (adx / ad) * 110 * dt; h.y += (ady / ad) * 110 * dt; }
+    } else if (d > 260) { h.x += (dx / d) * 120 * dt; h.y += (dy / d) * 120 * dt; }
     else if (d < 120) { h.x -= (dx / d) * 60 * dt; h.y -= (dy / d) * 60 * dt; }
     h.shootCd -= dt;
     if (h.shootCd <= 0 && d < 320) {
