@@ -80,6 +80,7 @@ function readDebug() {
   return {
     screen: G.screen, overlay: G.overlay, mission: G.mission ? G.mission.idx : -1,
     missionName: G.mission ? G.mission.name : null, missionText: G.mission ? G.mission.text : null,
+    marker: G.mission && G.mission.marker ? { x: Math.round(G.mission.marker.x), y: Math.round(G.mission.marker.y) } : null,
     wanted: p.wanted, money: p.money, health: p.health, armor: p.armor,
     weapon: p.weapon, ammo: p.ammo.slice(), x: Math.round(p.x), y: Math.round(p.y),
     onFoot: p.onFoot, car: p.car, speed: Math.round(p.speed),
@@ -97,6 +98,7 @@ window.__debug = {
   setWanted: (n) => { G.player.heat = [0, 10, 25, 45, 65, 85][n] || 0; G.player.lastCrime = G.time; return G.player.wanted; },
   giveMoney: (n) => { G.player.money += n; return G.player.money; },
   teleport: (x, y) => { G.player.x = x; G.player.y = y; return true; },
+  hurt: (n) => { hurtPlayer(G, n); return G.player.health; },
   state: () => readDebug(),
 };
 
