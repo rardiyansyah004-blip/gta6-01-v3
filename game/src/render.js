@@ -617,7 +617,7 @@ export function createRenderer(canvas) {
       else if (G.overlay === 'shop') drawShop(G, 'shop');
       else if (G.overlay === 'garage') drawShop(G, 'garage');
     } else if (screen === SCREEN_PAUSED) { drawHUD(G); drawMinimap(G); drawPaused(); }
-    else if (screen === SCREEN_BUSTED) { drawHUD(G); drawMinimap(G); drawBusted(); }
+    else if (screen === SCREEN_BUSTED) { drawHUD(G); drawMinimap(G); drawBusted(G); }
   }
 
   return { draw, SCREEN_TITLE, SCREEN_PLAY, SCREEN_PAUSED, SCREEN_BUSTED };

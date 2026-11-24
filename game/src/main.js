@@ -246,8 +246,8 @@ function runGame() {
       if (shoot(G, w.x, w.y) >= 0) audio.shot();
     }
     G.stepWorld(inputLocal, STEP);
-    // Safehouse heals and cools heat.
-    if (nearSpot(G.city.spots.safehouse, 90) && G.healCd <= 0 && (G.player.health < 100 || G.player.heat > 0)) {
+    // Safehouse heals and cools heat — but it cannot revive the dead.
+    if (G.player.health > 0 && nearSpot(G.city.spots.safehouse, 90) && G.healCd <= 0 && (G.player.health < 100 || G.player.heat > 0)) {
       healAtSafehouse(G);
       G.healCd = 5;
     }
