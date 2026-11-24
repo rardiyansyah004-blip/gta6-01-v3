@@ -97,8 +97,8 @@ export function collideBuildings(city, x, y, r) {
 }
 
 export function randomRoadPoint(city, rng) {
-  if (rng.chance(0.5)) return { x: rng.pick(city.roadsV) + rng.range(-10, 10), y: rng.range(200, WORLD.h - 200) };
-  return { x: rng.range(200, WORLD.w - 200), y: rng.pick(city.roadsH) + rng.range(-10, 10) };
+  if (rng.chance(0.5)) return { x: rng.pick(city.roadsV) + rng.range(-10, 10), y: rng.range(200, WORLD.h - 200), vertical: true };
+  return { x: rng.range(200, WORLD.w - 200), y: rng.pick(city.roadsH) + rng.range(-10, 10), vertical: false };
 }
 
 export function lightState(light, t) {

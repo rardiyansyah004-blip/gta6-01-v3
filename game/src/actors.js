@@ -2,7 +2,7 @@
 // with daily routines, traffic that obeys the lights, and the SBPD — cruisers
 // that chase and ram, roadblocks, foot cops, the Air One helicopter and, at
 // five stars, a SWAT van. Wanted is heat: crimes raise it, quiet lowers it.
-import { WORLD, CARS, WEAPONS, PALETTE } from './config.js';
+import { WORLD, CARS, WEAPONS, PALETTE, TUNE_BONUS } from './config.js';
 import { onRoad, collideBuildings, randomRoadPoint, lightState } from './city.js';
 
 export function createPlayer(city) {
@@ -18,11 +18,15 @@ export function createPlayer(city) {
 export function spawnTraffic(G, n) {
   for (let i = 0; i < n; i += 1) {
     const p = randomRoadPoint(G.city, G.rng);
-    const vertical = G.rng.chance(0.5);
+    const lane = G.rng.pick([-11, 11]);
+    const dir = G.rng.chance(0.5) ? 1 : -1;
     G.traffic.push({
-      x: p.x, y: p.y, angle: vertical ? (G.rng.chance(0.5) ? Math.PI / 2 : -Math.PI / 2) : (G.rng.chance(0.5) ? 0 : Math.PI),
+      // Cars drive along the road they spawned on, in their own lane.
+      x: p.vertical ? p.x + lane : p.x,
+      y: p.vertical ? p.y : p.y + lane,
+      angle: p.vertical ? (dir > 0 ? Math.PI / 2 : -Math.PI / 2) : (dir > 0 ? 0 : Math.PI),
       speed: G.rng.range(90, 150), model: G.rng.int(0, 4), color: G.rng.pick(['#c0392b', '#2980b9', '#7f8c8d', '#e67e22', '#16a085', '#d7dee8']),
-      vertical, dir: G.rng.chance(0.5) ? 1 : -1, lane: G.rng.pick([-11, 11]), stopped: false,
+      vertical: p.vertical, dir, lane, stopped: false,
     });
   }
 }
@@ -71,12 +75,13 @@ export function updateTraffic(G, dt) {
       const p = randomRoadPoint(G.city, G.rng);
       c.x = p.x; c.y = p.y;
     }
-    // Occasionally turn at a junction.
+    // Occasionally turn at a junction, snapping onto the new road.
     if (G.rng.chance(0.0012)) {
       const wasV = c.vertical;
       c.vertical = !wasV;
+      if (wasV) c.y = Math.round(c.y / 300) * 300 + c.lane;
+      else c.x = Math.round(c.x / 300) * 300 + c.lane;
       c.angle = c.vertical ? (c.dir > 0 ? Math.PI / 2 : -Math.PI / 2) : (c.dir > 0 ? 0 : Math.PI);
-      if (wasV) c.x = Math.round(c.x / 300) * 300; else c.y = Math.round(c.y / 300) * 300;
     }
     c.angle = c.vertical ? (c.dir > 0 ? Math.PI / 2 : -Math.PI / 2) : (c.dir > 0 ? 0 : Math.PI);
   }
