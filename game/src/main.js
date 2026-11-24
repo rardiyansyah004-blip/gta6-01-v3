@@ -86,6 +86,7 @@ function readDebug() {
     onFoot: p.onFoot, car: p.car, speed: Math.round(p.speed),
     cops: G.cops.length, footCops: G.footCops.length, peds: G.peds.length,
     traffic: G.traffic.length, hostiles: G.hostiles.length, heli: !!G.heli,
+    cam: G.cam ? { x: Math.round(G.cam.x), y: Math.round(G.cam.y) } : null,
     roadblocks: G.roadblocks.length, completed: G.completed.filter(Boolean).length,
     time: Math.round(G.time), clock: Math.round(G.clock * 10) / 10, respect: p.respect,
     dispatch: G.dispatch.slice(0, 2).map((d) => d.text),
