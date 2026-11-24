@@ -13,6 +13,37 @@ export const DISTRICTS = [
   { name: 'Neon Mile', x: 900, y: 1200, w: 1500, h: 600, sky: '#3d1a4d', accent: '#ff5da2', neon: true },
 ];
 
+export const CHAPTERS = [
+  { title: 'Ch. 1 — Coming Home', jobs: [0, 1, 2, 3], intro: 'Lena is back in Solara Bay. Earn your wheels, your name and your first ally.' },
+  { title: 'Ch. 2 — Taking the Bay', jobs: [4, 5, 6, 7], intro: 'The Bay is up for grabs. Win the streets, hold the harbor, take what is owed.' },
+  { title: 'Ch. 3 — Crown of Solara', jobs: [8, 9, 10, 11], intro: 'Five stars, one bank, one crown. Finish this and the Bay is yours.' },
+];
+
+export function chapterFor(idx) {
+  for (let i = 0; i < CHAPTERS.length; i += 1) if (CHAPTERS[i].jobs.includes(idx)) return i;
+  return 0;
+}
+
+// Crew: three original allies, each unlocked by finishing a specific early
+// job. Wheelman boosts top speed, Gunman fights beside you, Fixer cools heat.
+export const CREW = [
+  { id: 'wheelman', name: 'Rico Vega', role: 'Wheelman', unlockJob: 0, ability: '+12% car top speed in races and getaways' },
+  { id: 'fixer', name: 'Dex Marlowe', role: 'Fixer', unlockJob: 1, ability: 'Heat rises 25% slower — the SBPD looks away longer' },
+  { id: 'gunman', name: 'Mara Solis', role: 'Gunman', unlockJob: 3, ability: 'Fights beside you in takedowns and harbour defence' },
+];
+
+// District standing 0-100, starts at 50 everywhere. High standing slows
+// wanted gain and cheapens shops in that district; low standing does the
+// opposite and brings faster police response.
+export const STANDING_START = 50;
+export const STANDING_JOB_GAIN = 8;
+export const STANDING_HEAT_LOSS = 4;
+export function standingHeatMult(standing) { return 1.3 - (standing / 100) * 0.6; } // 1.0 at 50, 0.7 at 100, 1.3 at 0
+export function standingPriceMult(standing) { return 1.15 - (standing / 100) * 0.3; } // 1.0 at 50, 0.85 at 100, 1.15 at 0
+export function standingLabel(standing) {
+  return standing >= 75 ? 'Loved' : standing >= 60 ? 'Respected' : standing >= 40 ? 'Known' : standing >= 20 ? 'Watched' : 'Hunted';
+}
+
 export const CARS = [
   { name: 'Pinto', top: 300, accel: 210, turn: 2.6, color: '#b8c4cc', w: 34, h: 18 },
   { name: 'Comet', top: 360, accel: 260, turn: 3.0, color: '#e5534b', w: 36, h: 18 },
@@ -38,6 +69,7 @@ export const RADIO = [
   { name: 'BAY FM', genre: 'Neon Synth', bpm: 128, root: 196, scale: [0, 3, 5, 7, 10], wave: 'sawtooth' },
   { name: 'HARBOUR JAZZ', genre: 'Late Jazz', bpm: 84, root: 174, scale: [0, 3, 5, 6, 10], wave: 'sine' },
   { name: 'VICE COAST', genre: 'Bass House', bpm: 124, root: 164, scale: [0, 0, 7, 10, 12], wave: 'square' },
+  { name: 'CREW FM', genre: 'Crew Anthems', bpm: 100, root: 146, scale: [0, 2, 5, 7, 10], wave: 'triangle' },
 ];
 
 export const TUNE_PRICE = 500;
@@ -53,5 +85,5 @@ export const PALETTE = {
 };
 
 export const FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif';
-export const SAVE_KEY = 'solara-bay-v3.slot';
-export const SAVE_VER = 3;
+export const SAVE_KEY = 'solara-bay-v4.slot';
+export const SAVE_VER = 4;

@@ -37,8 +37,11 @@ function walkToward(G, tx, ty, seconds) {
 
 /**
  * Stage the named scene on a fresh game state and return the screen to draw.
- * chase: five-star finale pursuit. race: Street Kings mid-race. city: Lena
- * on foot at a Neon Mile crossing during the taxi job. title: title screen.
+ * chase: five-star finale pursuit (wanted stars + Air One + minimap route
+ * + mission objective + damage smoke, all in one frame). race: Street Kings
+ * mid-race with Rico Vega's wheelman boost and live standings. city: Lena
+ * on foot at a Neon Mile crossing during the taxi job, standing shown.
+ * title: title screen with chapters, crew and save slots.
  */
 export function stageShot(name, G) {
   G.reset();
@@ -46,6 +49,9 @@ export function stageShot(name, G) {
     G.player.x = 1500; G.player.y = 1500;
     G.player.onFoot = false; G.player.car = 1; G.player.angle = 0;
     G.player.money = 4200; G.player.respect = 8200;
+    G.completed = [true, true, true, true, true, false, false, false, false, false, false, false];
+    G.crew = ['wheelman', 'fixer']; // Rico Vega is driving the race with you
+    G.standing['Neon Mile'] = 72;
     startMission(G, 5);
     driveToward(G, G.mission.marker.x, G.mission.marker.y, 5);
     return { screen: SCREEN_PLAY };
@@ -55,6 +61,9 @@ export function stageShot(name, G) {
     G.player.onFoot = true; G.player.angle = -Math.PI / 2;
     G.player.money = 3100; G.player.respect = 5200; G.player.weapon = 1;
     G.player.ammo[1] = 60;
+    G.completed = [true, true, true, true, false, false, false, false, false, false, false, false];
+    G.crew = ['wheelman', 'fixer', 'gunman'];
+    G.standing['Neon Mile'] = 68; G.standing['Crown District'] = 61;
     startMission(G, 4);
     spawnPeds(G, 14);
     walkToward(G, 1500, 1500, 2);
@@ -64,12 +73,15 @@ export function stageShot(name, G) {
   if (name === 'title') {
     // Three lived-in save slots for the title screen to show.
     G.completed = [true, true, true, true, false, false, false, false, false, false, false, false];
+    G.crew = ['wheelman', 'fixer']; // jobs 1-2 done, so Rico and Dex are in
     G.player.money = 12500; G.player.respect = 8200;
     saveSlot(G, 1);
     G.completed = [true, true, true, true, true, true, true, false, false, false, false, false];
+    G.crew = ['wheelman', 'fixer', 'gunman'];
     G.player.money = 28400; G.player.respect = 21000;
     saveSlot(G, 2);
     G.completed = [true, true, true, true, true, true, true, true, true, false, false, false];
+    G.crew = ['wheelman', 'fixer', 'gunman'];
     G.player.money = 41200; G.player.respect = 38000;
     saveSlot(G, 3);
     G.completed = [true, true, true, true, false, false, false, false, false, false, false, false];
@@ -78,10 +90,15 @@ export function stageShot(name, G) {
     for (let i = 0; i < 300; i += 1) G.stepWorld({ up: false, down: false, left: false, right: false }, SAMPLE);
     return { screen: SCREEN_TITLE };
   }
-  // Default: chase — the five-star finale.
+  // Default: chase — the five-star finale. Wanted stars, Air One, the
+  // minimap route line, the mission objective and damage smoke together.
   G.player.x = 1800; G.player.y = 1500;
   G.player.onFoot = false; G.player.car = 7; G.player.tunes = 3; G.player.angle = 0;
   G.player.money = 52300; G.player.respect = 42000; G.player.armor = 60;
+  G.player.damage = 68; // heavy damage: smoke trails off the Stallion
+  G.completed = [true, true, true, true, true, true, true, true, true, true, true, false];
+  G.crew = ['wheelman', 'fixer', 'gunman'];
+  G.standing['Crown District'] = 82;
   addHeat(G, 85);
   startMission(G, 11);
   dispatch(G, 'SBPD dispatch: Air One is overhead — searchlight on the suspect');

@@ -2,8 +2,9 @@
 // with daily routines, traffic that obeys the lights, and the SBPD — cruisers
 // that chase and ram, roadblocks, foot cops, the Air One helicopter and, at
 // five stars, a SWAT van. Wanted is heat: crimes raise it, quiet lowers it.
-import { WORLD, CARS, WEAPONS, PALETTE, TUNE_BONUS } from './config.js';
-import { onRoad, collideBuildings, randomRoadPoint, lightState } from './city.js';
+import { WORLD, CARS, WEAPONS, PALETTE, TUNE_BONUS, standingHeatMult } from './config.js';
+import { onRoad, collideBuildings, randomRoadPoint, lightState, districtAt } from './city.js';
+import { clamp } from './rng.js';
 
 export function createPlayer(city) {
   return {
@@ -11,8 +12,43 @@ export function createPlayer(city) {
     onFoot: true, car: -1, tunes: 0, health: 100, armor: 0, weapon: 0,
     ammo: WEAPONS.map((w) => w.ammo), money: 250, respect: 0,
     heat: 0, wanted: 0, lastCrime: -99, fireCd: 0, punchCd: 0, hurtCd: 0,
-    kills: 0, carsStolen: 0, fares: 0,
+    kills: 0, carsStolen: 0, fares: 0, damage: 0, stolenId: -1,
   };
+}
+
+// Crew ally (Mara Solis, the gunman): spawns beside the player in takedown
+// and defence jobs and shoots the nearest hostile. Returns the ally object.
+export function spawnCrewAlly(G, near) {
+  const ally = { x: near.x + 40, y: near.y + 40, hp: 3, shootCd: 0.5, name: 'Mara Solis' };
+  G.crewAlly = ally;
+  dispatch(G, 'Crew: Mara Solis is on overwatch — she will cover you');
+  return ally;
+}
+
+export function updateCrewAlly(G, dt) {
+  const a = G.crewAlly;
+  if (!a || G.hostiles.length === 0) return;
+  let best = null; let bd = 1e9;
+  for (const h of G.hostiles) {
+    const d = Math.hypot(h.x - a.x, h.y - a.y);
+    if (d < bd) { bd = d; best = h; }
+  }
+  if (!best) return;
+  if (bd > 200) { // close the distance, then hold and shoot
+    a.x += ((best.x - a.x) / bd) * 190 * dt;
+    a.y += ((best.y - a.y) / bd) * 190 * dt;
+  }
+  a.shootCd -= dt;
+  if (a.shootCd <= 0 && bd < 320) {
+    a.shootCd = 0.9;
+    G.effects.push({ type: 'muzzle', x: a.x, y: a.y, t: 0.08, angle: Math.atan2(best.y - a.y, best.x - a.x) });
+    best.hp -= 1;
+    if (best.hp <= 0) {
+      G.hostiles.splice(G.hostiles.indexOf(best), 1);
+      G.player.kills += 1;
+      dispatch(G, 'Crew: Mara dropped one — nice shooting');
+    }
+  }
 }
 
 export function spawnTraffic(G, n) {
@@ -119,7 +155,17 @@ export function scarePeds(G, x, y, radius) {
 }
 
 export function addHeat(G, amount) {
-  G.player.heat = Math.min(100, G.player.heat + amount);
+  // District standing shapes heat: respected streets cool faster, hunted
+  // streets bring the SBPD down harder. The Fixer (Dex Marlowe) slows it
+  // a further 25%. Causing serious heat also dents local standing.
+  const standing = (G.standing && G.standing[districtAt(G.player.x, G.player.y).name]) ?? 50;
+  let scaled = amount * standingHeatMult(standing);
+  if ((G.crew || []).includes('fixer')) scaled *= 0.75;
+  G.player.heat = Math.min(100, G.player.heat + scaled);
+  if (amount >= 15 && G.standing) {
+    const d = districtAt(G.player.x, G.player.y).name;
+    G.standing[d] = clamp((G.standing[d] ?? 50) - 2, 0, 100);
+  }
   G.player.lastCrime = G.time;
   const w = G.player.heat >= 80 ? 5 : G.player.heat >= 60 ? 4 : G.player.heat >= 40 ? 3 : G.player.heat >= 20 ? 2 : G.player.heat >= 8 ? 1 : 0;
   if (w !== G.player.wanted) {
@@ -149,7 +195,7 @@ export function updatePolice(G, dt) {
   const w = p.heat >= 80 ? 5 : p.heat >= 60 ? 4 : p.heat >= 40 ? 3 : p.heat >= 20 ? 2 : p.heat >= 8 ? 1 : 0;
   if (w !== p.wanted) { p.wanted = w; if (w === 0) dispatch(G, 'SBPD dispatch: suspect lost — standing down'); }
 
-  const wantCops = Math.min(p.wanted, 4);
+  const wantCops = Math.min(p.wanted, 4) + (((G.standing && G.standing[districtAt(p.x, p.y).name]) ?? 50) < 30 && p.wanted > 0 ? 1 : 0);
   while (G.cops.length < wantCops) G.cops.push(spawnCop(G));
   while (G.cops.length > wantCops) G.cops.pop();
   const wantSwat = p.wanted >= 5 ? 1 : 0;
@@ -177,6 +223,7 @@ export function updatePolice(G, dt) {
     if (dist < 34 && c.ramCd <= 0) {
       c.ramCd = 0.9;
       hurtPlayer(G, c.swat ? 12 : 8);
+      p.damage = clamp(p.damage + 6, 0, 100);
       c.speed *= 0.4;
       p.speed *= 0.55;
       const push = 26;
@@ -266,7 +313,11 @@ export function updatePlayer(G, input, dt) {
     p.speed = (mx || my) ? sp : 0;
   } else {
     const onroad = onRoad(G.city, p.x, p.y);
-    const top = model.top * (1 + TUNE_BONUS * p.tunes) * (onroad ? 1 : 0.55);
+    // Wheelman (Rico Vega) +12% top speed; heavy car damage slows the car
+    // and will show smoke in the renderer once damage passes 50.
+    const wheelman = (G.crew || []).includes('wheelman') ? 1.12 : 1;
+    const damageSlow = 1 - clamp(p.damage, 0, 100) * 0.004;
+    const top = model.top * (1 + TUNE_BONUS * p.tunes) * wheelman * damageSlow * (onroad ? 1 : 0.55);
     const steer = (input.left ? -1 : 0) + (input.right ? 1 : 0);
     if (input.up) p.speed = Math.min(top, p.speed + model.accel * dt);
     else if (input.down) p.speed = Math.max(-90, p.speed - model.accel * 1.4 * dt);
@@ -276,7 +327,7 @@ export function updatePlayer(G, input, dt) {
     p.y += Math.sin(p.angle) * p.speed * dt;
     const fixed = collideBuildings(G.city, p.x, p.y, 16);
     if (fixed.x !== p.x || fixed.y !== p.y) {
-      if (Math.abs(p.speed) > 240) { hurtPlayer(G, 6); G.effects.push({ type: 'crash', x: p.x, y: p.y, t: 0.4 }); }
+      if (Math.abs(p.speed) > 240) { hurtPlayer(G, 6); p.damage = clamp(p.damage + 9, 0, 100); G.effects.push({ type: 'crash', x: p.x, y: p.y, t: 0.4 }); }
       p.speed *= 0.45;
     }
     p.x = fixed.x; p.y = fixed.y;
@@ -310,6 +361,8 @@ export function trySteal(G) {
   if (!best) return null;
   G.traffic.splice(G.traffic.indexOf(best), 1);
   p.car = best.model;
+  p.stolenId = best.markId ?? -1; // identity of the exact car stolen, for Repo Run
+  p.damage = best.damage ?? 0;
   p.onFoot = false;
   p.angle = best.angle;
   p.speed = 0;

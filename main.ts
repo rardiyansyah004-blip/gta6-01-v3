@@ -10,21 +10,31 @@
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 
-import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, writeFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+const started = Date.now();
 
 mkdirSync(out, { recursive: true });
 if (!existsSync(join(here, 'game', 'index.html'))) {
   throw new Error('game/index.html is missing — the entry has no playable game to hand in');
 }
 cpSync(join(here, 'game'), join(out, 'game'), { recursive: true });
+const gameFiles = readdirSync(join(out, 'game'), { recursive: true }).length;
+console.log(`Solara Bay v4: copied game/ (${gameFiles} entries) to ${out}`);
 mkdirSync(join(out, 'screenshots'), { recursive: true });
 if (existsSync(join(here, 'screenshots'))) cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
+// Fail loudly on a missing or oversized screenshot instead of handing in
+// an entry the scorer would refuse.
+for (const shot of readdirSync(join(out, 'screenshots'))) {
+  const size = statSync(join(out, 'screenshots', shot)).size;
+  if (size > 262144) throw new Error(`screenshot ${shot} is ${size} bytes — over the 256 KiB cap`);
+}
+console.log(`Solara Bay v4: screenshots OK (${readdirSync(join(out, 'screenshots')).length} files)`);
 
 // The scorer's own caps (reference/gate.json): only text_max_bytes shapes the
 // bytes; the others refuse an entry the scorer would refuse (more than 4
@@ -40,3 +50,4 @@ writeFileSync(
     game_path_max_bytes: 1000,
   }),
 );
+console.log(`Solara Bay v4: dossier written in ${Date.now() - started} ms`);

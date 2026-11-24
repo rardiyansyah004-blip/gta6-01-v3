@@ -3,9 +3,13 @@
 // three-wave defence, repos, an escort, a night shift under heat, a bank job
 // and a five-star finale. One mission runs at a time; finishing it pays cash
 // and respect, and the next job unlocks.
-import { WORLD, CARS } from './config.js';
+import { WORLD, CARS, CHAPTERS, chapterFor, CREW } from './config.js';
 import { randomRoadPoint } from './city.js';
-import { addHeat, dispatch, hurtPlayer } from './actors.js';
+import { addHeat, dispatch, hurtPlayer, spawnCrewAlly, updateCrewAlly } from './actors.js';
+import { recordJobStanding, unlockCrewForJob } from './economy.js';
+import { clamp } from './rng.js';
+
+export { CHAPTERS, chapterFor };
 
 function marker(G, x, y, r = 46) { G.mission.marker = { x, y, r }; }
 function farPoint(G, minDist = 700) {
@@ -82,9 +86,9 @@ const MISSIONS = [
   },
   {
     name: 'Dockside Takedown', brief: 'Four of the Harbormen crew are waiting at the docks. Clear them out.', payout: 1400,
-    start(G) { const d = { x: 3000, y: 2400 }; spawnHostiles(G, 4, d); marker(G, d.x, d.y, 90); G.mission.text = 'Take down 4 hostiles at the docks'; },
+    start(G) { const d = { x: 3000, y: 2400 }; spawnHostiles(G, 4, d); marker(G, d.x, d.y, 90); if ((G.crew || []).includes('gunman')) spawnCrewAlly(G, d); G.mission.text = 'Take down 4 hostiles at the docks' + ((G.crew || []).includes('gunman') ? ' — Mara has your back' : ''); },
     tick(G, dt) {
-      updateHostiles(G, dt);
+      updateHostiles(G, dt); updateCrewAlly(G, dt);
       if (G.hostiles.length === 0) return 'done';
       return null;
     },
@@ -118,38 +122,48 @@ const MISSIONS = [
       G.mission.step = 0; G.mission.timer = 150;
       G.mission.rings = [farPoint(G, 600), farPoint(G, 600), farPoint(G, 600), farPoint(G, 600)];
       marker(G, G.mission.rings[0].x, G.mission.rings[0].y);
-      G.rivals = G.mission.rings.map((r, i) => ({ x: G.player.x + (i - 1) * 60, y: G.player.y + 60, angle: 0, speed: 0, ring: 0, model: G.rng.int(1, 3), done: false }));
-      G.mission.text = 'Race — checkpoint 1 of 4';
+      const order = G.rng.shuffle([0, 1, 2]);
+      G.rivals = order.map((k, i) => ({ x: G.player.x + (i - 1) * 60, y: G.player.y + 60, angle: 0, speed: 0, ring: 0, model: G.rng.int(1, 3), done: false, name: ['Vex', 'Roxy', 'Mako'][k] }));
+      G.mission.text = 'Race — checkpoint 1 of 4 — you are P4';
     },
     tick(G, dt) {
       const m = G.mission;
       m.timer -= dt;
       if (m.timer <= 0) return 'fail';
-      // Rivals chase the rings at a fixed pace.
+      // Rubber-banding: a rival ahead of you cruises, a rival behind you
+      // pushes harder, so the race stays close instead of running away.
       for (const r of G.rivals) {
         if (r.done) continue;
         const t = m.rings[r.ring];
         const dx = t.x - r.x, dy = t.y - r.y;
         const d = Math.hypot(dx, dy) || 1;
         r.angle = Math.atan2(dy, dx);
-        r.x += (dx / d) * 265 * dt; r.y += (dy / d) * 265 * dt;
-        if (d < 50) { r.ring += 1; if (r.ring >= 4) { r.done = true; dispatch(G, 'Street Kings: a rival finished the course'); } }
+        const lead = m.step - r.ring; // +ve: you are ahead of this rival
+        const speed = clamp(265 - lead * 30, 205, 345);
+        r.speed = speed;
+        r.x += (dx / d) * speed * dt; r.y += (dy / d) * speed * dt;
+        if (d < 50) { r.ring += 1; if (r.ring >= 4) { r.done = true; dispatch(G, `Street Kings: ${r.name} finished the course`); } }
       }
+      // Lose condition: any rival completing all 4 rings first ends the job.
+      if (G.rivals.some((r) => r.done)) return 'fail';
       const ring = m.rings[m.step];
       if (Math.hypot(G.player.x - ring.x, G.player.y - ring.y) < 60) {
         m.step += 1;
         if (m.step >= 4) return 'done';
         marker(G, m.rings[m.step].x, m.rings[m.step].y);
-        m.text = `Race — checkpoint ${m.step + 1} of 4`;
       }
+      // Live standings: your place among the four, plus the best rival.
+      const ahead = G.rivals.filter((r) => r.ring > m.step || (r.ring === m.step && !r.done)).length;
+      const bestRival = G.rivals.reduce((b, r) => (r.ring > b.ring ? r : b), G.rivals[0]);
+      m.text = `Race — checkpoint ${m.step + 1} of 4 — you are P${ahead + 1}/4, ${bestRival.name} on ring ${bestRival.ring + 1}/4`;
       return null;
     },
   },
   {
     name: 'Harbor Heat', brief: 'Hold the container yard through three waves. They keep coming.', payout: 2200,
-    start(G) { G.mission.wave = 0; G.mission.step = 0; const d = { x: 3000, y: 2400 }; spawnHostiles(G, 3, d); marker(G, d.x, d.y, 110); G.mission.text = 'Wave 1 of 3 — hold the yard'; },
+    start(G) { G.mission.wave = 0; G.mission.step = 0; const d = { x: 3000, y: 2400 }; spawnHostiles(G, 3, d); marker(G, d.x, d.y, 110); if ((G.crew || []).includes('gunman')) spawnCrewAlly(G, d); G.mission.text = 'Wave 1 of 3 — hold the yard' + ((G.crew || []).includes('gunman') ? ' — Mara is with you' : ''); },
     tick(G, dt) {
-      updateHostiles(G, dt);
+      updateHostiles(G, dt); updateCrewAlly(G, dt);
       const m = G.mission;
       if (G.hostiles.length === 0) {
         m.wave += 1;
@@ -168,7 +182,7 @@ const MISSIONS = [
       G.mission.marks = [];
       for (let i = 0; i < 2; i += 1) {
         const p = farPoint(G, 500);
-        const car = { x: p.x, y: p.y, angle: 0, speed: 0, model: G.rng.int(0, 4), color: '#ff5da2', vertical: false, dir: 1, lane: 0, stopped: true, marked: true };
+        const car = { x: p.x, y: p.y, angle: 0, speed: 0, model: G.rng.int(0, 4), color: '#ff5da2', vertical: false, dir: 1, lane: 0, stopped: true, marked: true, markId: 'repo-' + i, damage: 0 };
         G.traffic.push(car);
         G.mission.marks.push(car);
       }
@@ -179,10 +193,18 @@ const MISSIONS = [
       const m = G.mission;
       if (m.step === 0) {
         const target = m.marks[m.got];
-        if (!G.traffic.includes(target) && !G.player.onFoot && G.player.car === target.model) {
+        // Identity is the exact marked car (markId set when it was parked),
+        // not its model: several traffic cars share a model, so matching on
+        // model alone let any same-model car count — and the old fallback
+        // branch advanced the job even when the wrong car was stolen.
+        if (!G.player.onFoot && G.player.stolenId === target.markId) {
           m.step = 1; marker(G, G.city.spots.garage.x, G.city.spots.garage.y); m.text = 'Deliver it to the garage';
-        } else if (!G.traffic.includes(target)) { m.step = 1; marker(G, G.city.spots.garage.x, G.city.spots.garage.y); m.text = 'Deliver it to the garage'; }
-        marker(G, target.x, target.y);
+        } else if (!G.traffic.includes(target) && !G.player.onFoot) {
+          m.text = 'Wrong ride — that is not the pink-marked car. Steal the marked one';
+          marker(G, target.x, target.y);
+        } else {
+          marker(G, target.x, target.y);
+        }
       } else if (Math.hypot(G.player.x - G.city.spots.garage.x, G.player.y - G.city.spots.garage.y) < 70 && !G.player.onFoot) {
         m.got += 1;
         G.player.money += 300;
@@ -288,14 +310,39 @@ const MISSIONS = [
 export function missionCount() { return MISSIONS.length; }
 export function missionInfo(i) { return { name: MISSIONS[i].name, brief: MISSIONS[i].brief, payout: MISSIONS[i].payout }; }
 
+export function chapterProgress(G, ch) {
+  const jobs = CHAPTERS[ch].jobs;
+  return jobs.filter((j) => G.completed[j]).length;
+}
+
+export function isJobUnlocked(G, idx) {
+  // Sequential unlock: a job opens only when every earlier job is done, so
+  // chapters play in order and the finale (job 11) needs chapters 1 and 2.
+  for (let j = 0; j < idx; j += 1) if (!G.completed[j]) return false;
+  return true;
+}
+
 export function startMission(G, idx) {
+  if (!isJobUnlocked(G, idx)) {
+    const prev = idx - 1;
+    dispatch(G, `Job ${idx + 1} is locked — finish "${MISSIONS[prev].name}" first`);
+    G.banner = { text: `LOCKED — finish "${MISSIONS[prev].name}" first`, t: 3 };
+    return null;
+  }
   const def = MISSIONS[idx];
-  G.mission = { idx, name: def.name, step: 0, timer: 0, text: '', marker: null, data: {} };
+  const ch = chapterFor(idx);
+  G.mission = { idx, name: def.name, step: 0, timer: 0, text: '', marker: null, data: {}, chapter: ch };
   G.hostiles = [];
   G.rivals = [];
   G.vip = null;
+  G.crewAlly = null;
   def.start(G);
+  if (CHAPTERS[ch].jobs[0] === idx) {
+    G.banner = { text: `${CHAPTERS[ch].title.toUpperCase()} — ${CHAPTERS[ch].intro}`, t: 4 };
+    dispatch(G, `${CHAPTERS[ch].title}: ${CHAPTERS[ch].intro}`);
+  }
   dispatch(G, `Job ${idx + 1}/12 — ${def.name}: ${def.brief}`);
+  return G.mission;
 }
 
 export function updateMission(G, dt) {
@@ -303,27 +350,33 @@ export function updateMission(G, dt) {
   const result = MISSIONS[G.mission.idx].tick(G, dt);
   if (result === 'done') {
     const def = MISSIONS[G.mission.idx];
+    const doneIdx = G.mission.idx;
     G.player.money += def.payout;
     G.player.respect += def.payout;
-    G.completed[G.mission.idx] = true;
+    G.completed[doneIdx] = true;
+    recordJobStanding(G, doneIdx);
+    const recruit = unlockCrewForJob(G, doneIdx);
     dispatch(G, `Job complete — ${def.name}: +$${def.payout}`);
-    G.banner = { text: `JOB COMPLETE — ${def.name}  +$${def.payout}`, t: 3 };
+    G.banner = { text: `JOB COMPLETE — ${def.name}  +$${def.payout}` + (recruit ? ` — ${recruit.name} joined your crew!` : ''), t: 3 };
+    if (recruit && G.audio) G.audio.crewCue();
     G.mission = null;
     G.hostiles = [];
     G.rivals = [];
     G.vip = null;
+    G.crewAlly = null;
     if (typeof G.onMissionDone === 'function') G.onMissionDone();
   } else if (result === 'fail') {
-    dispatch(G, `Job failed — ${MISSISONS_NAME(G)}: the crew will remember this`);
+    dispatch(G, `Job failed — ${missionName(G)}: the crew will remember this`);
     G.banner = { text: 'JOB FAILED — try again from the jobs menu', t: 3 };
     G.mission = null;
     G.hostiles = [];
     G.rivals = [];
     G.vip = null;
+    G.crewAlly = null;
   }
 }
 
-function MISSISONS_NAME(G) { return G.mission ? G.mission.name : ''; }
+function missionName(G) { return G.mission ? G.mission.name : ''; }
 
 export function nextMissionIndex(G) {
   for (let i = 0; i < MISSIONS.length; i += 1) if (!G.completed[i]) return i;

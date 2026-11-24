@@ -1,7 +1,8 @@
-// All sound is synthesised in the browser: four radio stations as looping
+// All sound is synthesised in the browser: five radio stations as looping
 // WebAudio patterns (bass + lead + hats, each in its own scale and tempo),
 // an engine hum that follows the car's speed, a two-tone siren while wanted,
-// and short bleeps for shots, pickups and crashes. No audio files, no network.
+// and short bleeps for shots, pickups, crashes, crew joins and chapter intros.
+// No audio files, no network.
 import { RADIO } from './config.js';
 
 export function createAudio() {
@@ -51,6 +52,10 @@ export function createAudio() {
     },
     shot() { A.blip(180, 0.09, 'square', 0.16); },
     pickup() { A.blip(660, 0.12, 'sine', 0.14); A.blip(990, 0.16, 'sine', 0.12); },
+    // Crew cue: a rising two-note chime when a crew member joins, plus a
+    // low chapter sting for chapter intros (played from the banner code).
+    crewCue() { A.blip(523, 0.14, 'triangle', 0.16); setTimeout(() => A.blip(784, 0.22, 'triangle', 0.16), 140); },
+    chapterSting() { A.blip(196, 0.3, 'sawtooth', 0.12); setTimeout(() => A.blip(294, 0.4, 'sawtooth', 0.12), 180); },
     crash() { A.blip(70, 0.25, 'sawtooth', 0.2); },
     fail() { A.blip(220, 0.3, 'sawtooth', 0.14); A.blip(160, 0.4, 'sawtooth', 0.14); },
     tick(G, dt) {

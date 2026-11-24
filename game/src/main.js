@@ -14,10 +14,12 @@ import {
   createPlayer, spawnTraffic, spawnPeds, updatePlayer, updateTraffic,
   updatePeds, updatePolice, trySteal, shoot, punch, dispatch, hurtPlayer,
 } from './actors.js';
-import { startMission, updateMission, nextMissionIndex, missionCount } from './missions.js';
-import { buyWeapon, buyAmmo, buyArmor, buyTune, healAtSafehouse, saveSlot, loadSlot, applySave } from './economy.js';
+import { startMission, updateMission, nextMissionIndex, missionCount, isJobUnlocked, chapterFor } from './missions.js';
+import { buyWeapon, buyAmmo, buyArmor, buyTune, healAtSafehouse, saveSlot, loadSlot, applySave, defaultStanding, crewUnlocked, standingFor } from './economy.js';
 import { createAudio } from './audio.js';
-import { createInput, mouseWorld, ACTION_CONFIRM, ACTION_PAUSE, ACTION_STEAL, ACTION_PUNCH, ACTION_RADIO, ACTION_MUTE, ACTION_TUNE, ACTION_BUY, ACTION_SAVE } from './input.js';
+import { createInput, mouseWorld, ACTION_CONFIRM, ACTION_PAUSE, ACTION_STEAL, ACTION_PUNCH, ACTION_RADIO, ACTION_MUTE, ACTION_TUNE, ACTION_BUY, ACTION_SAVE, ACTION_CREW } from './input.js';
+import { CREW, CHAPTERS, standingLabel } from './config.js';
+import { districtAt } from './city.js';
 import { createRenderer, SCREEN_TITLE, SCREEN_PLAY, SCREEN_PAUSED, SCREEN_BUSTED } from './render.js';
 import { stageShot } from './shots.js';
 
@@ -41,6 +43,7 @@ function createGame(seedValue) {
     traffic: [], peds: [], cops: [], footCops: [], roadblocks: [],
     hostiles: [], rivals: [], vip: null, heli: null, effects: [],
     dispatch: [], mission: null, completed: Array(12).fill(false),
+    standing: defaultStanding(), crew: [], crewAlly: null, crewFocus: 0,
     banner: null, overlay: null, screen: SCREEN_TITLE,
     lastDistrict: '', districtFlash: 0, healCd: 0, lastBlock: 0,
     audio,
@@ -90,12 +93,18 @@ function readDebug() {
     roadblocks: G.roadblocks.length, completed: G.completed.filter(Boolean).length,
     time: Math.round(G.time), clock: Math.round(G.clock * 10) / 10, respect: p.respect,
     dispatch: G.dispatch.slice(0, 2).map((d) => d.text),
+    standing: { ...G.standing }, standingHere: standingFor(G, districtAt(p.x, p.y).name),
+    standingLabel: standingLabel(standingFor(G, districtAt(p.x, p.y).name)),
+    district: districtAt(p.x, p.y).name, crew: (G.crew || []).slice(),
+    crewNames: crewUnlocked(G).map((c) => c.name),
+    chapter: G.mission ? chapterFor(G.mission.idx) : CHAPTERS.findIndex((c) => c.jobs.some((j) => !G.completed[j])),
+    damage: Math.round(p.damage || 0), stolenId: p.stolenId, crewAlly: !!G.crewAlly,
   };
 }
 
 window.__game = readDebug();
 window.__debug = {
-  startMission: (i) => { startMission(G, i); return G.mission.name; },
+  startMission: (i) => { const m = startMission(G, i); return m ? m.name : null; },
   setWanted: (n) => { G.player.heat = [0, 10, 25, 45, 65, 85][n] || 0; G.player.lastCrime = G.time; return G.player.wanted; },
   giveMoney: (n) => { G.player.money += n; return G.player.money; },
   teleport: (x, y) => { G.player.x = x; G.player.y = y; return true; },
@@ -106,6 +115,11 @@ window.__debug = {
   },
   hostiles: () => G.hostiles.map((h) => ({ x: Math.round(h.x), y: Math.round(h.y), hp: h.hp, d: Math.round(Math.hypot(h.x - G.player.x, h.y - G.player.y)) })),
   hurt: (n) => { G.player.hurtCd = 0; hurtPlayer(G, n); return G.player.health; },
+  crew: () => crewUnlocked(G).map((c) => ({ id: c.id, name: c.name, role: c.role, ability: c.ability })),
+  standing: () => ({ ...G.standing }),
+  chapter: (ch) => ({ title: CHAPTERS[ch].title, done: CHAPTERS[ch].jobs.filter((j) => G.completed[j]).length, total: CHAPTERS[ch].jobs.length }),
+  isUnlocked: (i) => isJobUnlocked(G, i),
+  damageCar: (n) => { G.player.damage = Math.min(100, (G.player.damage || 0) + n); return G.player.damage; },
   state: () => readDebug(),
 };
 
@@ -201,6 +215,17 @@ function runGame() {
     if (actions & ACTION_RADIO) { audio.ensure(); audio.nextStation(); announce('Radio: ' + audio.stationInfo().name); }
     if (actions & ACTION_MUTE) { audio.ensure(); audio.toggleMute(); }
     if (actions & ACTION_SAVE) { if (saveSlot(G, 1)) { announce('Quick-saved to slot 1.'); dispatch(G, 'Progress quick-saved to slot 1'); } }
+    if (actions & ACTION_CREW) {
+      const crew = crewUnlocked(G);
+      if (crew.length === 0) { announce('No crew yet — finish First Wheels to recruit Rico Vega.'); dispatch(G, 'Crew: nobody yet — finish job 1 to recruit Rico Vega (wheelman)'); }
+      else {
+        G.crewFocus = (G.crewFocus + 1) % crew.length;
+        const c = crew[G.crewFocus];
+        announce(`Crew: ${c.name}, ${c.role} — ${c.ability}`);
+        dispatch(G, `Crew focus: ${c.name} (${c.role}) — ${c.ability}`);
+        audio.ensure(); audio.pickup();
+      }
+    }
     if (actions & ACTION_TUNE && nearSpot(G.city.spots.garage, 110)) G.overlay = 'garage';
     if (actions & ACTION_BUY && nearSpot(G.city.spots.gunshop, 110)) G.overlay = 'shop';
   }
@@ -210,6 +235,7 @@ function runGame() {
     if (G.overlay === 'jobs') {
       const n = Number.parseInt(e.key, 10);
       if (n >= 1 && n <= missionCount()) {
+        if (!isJobUnlocked(G, n - 1)) { announce(`Job ${n} is locked — finish the earlier jobs first.`); return; }
         startMission(G, n - 1);
         G.overlay = null;
         audio.ensure(); audio.pickup();

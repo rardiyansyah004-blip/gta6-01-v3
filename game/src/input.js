@@ -1,6 +1,7 @@
 // Keyboard and mouse, read once a frame. WASD/arrows drive and walk, E
 // steals or exits a car, Space punches, click shoots, Q changes the radio,
 // M mutes, G tunes at the garage, B buys at the gun shop, F quick-saves,
+// C cycles the crew focus (wheelman / fixer / gunman) and reports the crew,
 // P or Escape pauses, Enter confirms.
 export const ACTION_CONFIRM = 1;
 export const ACTION_PAUSE = 2;
@@ -11,12 +12,13 @@ export const ACTION_MUTE = 32;
 export const ACTION_TUNE = 64;
 export const ACTION_BUY = 128;
 export const ACTION_SAVE = 256;
+export const ACTION_CREW = 512;
 
 const KEYMAP = {
   Enter: ACTION_CONFIRM, Space: ACTION_CONFIRM | ACTION_PUNCH,
   KeyP: ACTION_PAUSE, Escape: ACTION_PAUSE,
   KeyE: ACTION_STEAL, KeyQ: ACTION_RADIO, KeyM: ACTION_MUTE,
-  KeyG: ACTION_TUNE, KeyB: ACTION_BUY, KeyF: ACTION_SAVE,
+  KeyG: ACTION_TUNE, KeyB: ACTION_BUY, KeyF: ACTION_SAVE, KeyC: ACTION_CREW,
 };
 
 export function createInput(canvas) {

@@ -10,8 +10,11 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(fileURLToPath(new URL('./game', import.meta.url)));
 const args = process.argv.slice(2);
 const portIndex = args.indexOf('--port');
-const requested = portIndex === -1 ? 8080 : Number(args[portIndex + 1]);
+const envPort = Number(process.env.PORT ?? '');
+const requested = portIndex === -1 ? (Number.isInteger(envPort) && envPort > 0 ? envPort : 8080) : Number(args[portIndex + 1]);
 const port = Number.isInteger(requested) && requested > 0 && requested < 65536 ? requested : 8080;
+const hostIndex = args.indexOf('--host');
+const host = hostIndex === -1 ? '127.0.0.1' : (args[hostIndex + 1] || '127.0.0.1');
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -67,6 +70,7 @@ createServer((request, response) => {
     'cache-control': 'no-store',
   });
   createReadStream(file).pipe(response);
-}).listen(port, '127.0.0.1', () => {
-  console.log(`game/ is on http://localhost:${port}`);
+}).listen(port, host, () => {
+  console.log(`Solara Bay v4 — game/ is on http://${host}:${port} (started ${new Date().toISOString()})`);
+  console.log('Staged shots: ?shot=chase|race|city|title&seed=7 — e.g. http://localhost:8080/?shot=chase&seed=7');
 });

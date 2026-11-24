@@ -11,6 +11,18 @@ export function districtAt(x, y) {
   return DISTRICTS[0];
 }
 
+// Index of the district containing (x, y), for standing lookups keyed by
+// district name in game state (G.standing[districtName]).
+export function districtIndexAt(x, y) {
+  for (let i = 0; i < DISTRICTS.length; i += 1) {
+    const d = DISTRICTS[i];
+    if (x >= d.x && x < d.x + d.w && y >= d.y && y < d.y + d.h) return i;
+  }
+  return 0;
+}
+
+export function districtNameAt(x, y) { return districtAt(x, y).name; }
+
 export function buildCity(rng) {
   const roadsV = [];
   const roadsH = [];

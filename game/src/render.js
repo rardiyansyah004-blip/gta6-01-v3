@@ -1,10 +1,10 @@
 // Everything the eye sees: a camera that follows Lena, the city at dusk
 // sliding into night, traffic and crowds, the SBPD closing in, the HUD with
 // its minimap and dispatch feed, and the title / jobs / shop / pause screens.
-import { WORLD, CARS, WEAPONS, RADIO, PALETTE, FONT, DISTRICTS } from './config.js';
+import { WORLD, CARS, WEAPONS, RADIO, PALETTE, FONT, DISTRICTS, CHAPTERS, chapterFor, standingLabel } from './config.js';
 import { districtAt, lightState } from './city.js';
-import { rankName, rankProgress, slotSummaries } from './economy.js';
-import { missionInfo, missionCount } from './missions.js';
+import { rankName, rankProgress, slotSummaries, standingFor, crewUnlocked } from './economy.js';
+import { missionInfo, missionCount, isJobUnlocked } from './missions.js';
 
 const VIEW_W = 1280;
 const VIEW_H = 720;
@@ -231,6 +231,18 @@ export function createRenderer(canvas) {
       }
     } else {
       drawCar(ctx, p.x, p.y, p.angle, p.car, CARS[p.car].color, { police: false });
+      // Heavy damage smokes: grey puffs drifting off the bonnet, denser
+      // the worse the damage (damage 50+). A garage tune clears it.
+      if ((p.damage || 0) >= 50) {
+        const n = Math.floor(((p.damage || 0) - 40) / 15);
+        for (let i = 0; i < n; i += 1) {
+          const ph = G.time * 2 + i * 2.1;
+          ctx.fillStyle = `rgba(160,165,175,${0.5 + 0.12 * Math.sin(ph)})`;
+          ctx.beginPath();
+          ctx.arc(p.x + Math.cos(p.angle) * 14 + Math.sin(ph) * 8, p.y + Math.sin(p.angle) * 14 - 12 - (ph % 3) * 8, 8 + (ph % 3) * 3, 0, 7);
+          ctx.fill();
+        }
+      }
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 11px ' + FONT;
       ctx.textAlign = 'center';
@@ -250,6 +262,15 @@ export function createRenderer(canvas) {
       ctx.fillRect(h.x - 8, h.y - 14, 16, 3);
       ctx.fillStyle = '#ff6b6b';
       ctx.fillRect(h.x - 8, h.y - 14, 16 * (h.hp / 2), 3);
+    }
+    if (G.crewAlly) {
+      const a = G.crewAlly;
+      ctx.fillStyle = '#7ee0a3';
+      ctx.beginPath(); ctx.arc(a.x, a.y, 8, 0, 7); ctx.fill();
+      ctx.fillStyle = '#111';
+      ctx.font = 'bold 9px ' + FONT;
+      ctx.textAlign = 'center';
+      ctx.fillText('MARA', a.x, a.y - 14);
     }
     for (const f of G.footCops) {
       ctx.fillStyle = '#2f6fed';
@@ -370,6 +391,20 @@ export function createRenderer(canvas) {
       ctx.font = '13px ' + FONT;
       ctx.fillText(next >= 12 ? 'All 12 jobs done — the Bay is yours' : `Jobs done ${next}/12 — press J for the jobs menu`, VIEW_W / 2, 84);
     }
+    // District standing + crew, under the mission panel.
+    {
+      const dName = districtAt(p.x, p.y).name;
+      const st = standingFor(G, dName);
+      const crew = crewUnlocked(G);
+      ctx.fillStyle = 'rgba(20,24,36,0.88)';
+      rr(ctx, VIEW_W / 2 - 220, 120, 440, 34, 8); ctx.fill();
+      ctx.fillStyle = PALETTE.text;
+      ctx.font = '12px ' + FONT;
+      ctx.textAlign = 'center';
+      ctx.fillText(`${dName}: standing ${st} (${standingLabel(st)}) — shops ${st >= 60 ? 'cheaper' : st <= 30 ? 'dearer' : 'normal'} here`, VIEW_W / 2, 134);
+      ctx.fillStyle = crew.length ? PALETTE.good : PALETTE.muted;
+      ctx.fillText(crew.length ? `Crew: ${crew.map((c) => c.name).join(' • ')}  (C for roles)` : 'Crew: none yet — finish job 1 to recruit Rico Vega  (C)', VIEW_W / 2, 149);
+    }
     // Respect + radio, bottom-left.
     ctx.fillStyle = 'rgba(20,24,36,0.88)';
     rr(ctx, 12, VIEW_H - 64, 300, 52, 8); ctx.fill();
@@ -398,10 +433,11 @@ export function createRenderer(canvas) {
     });
     // Banner.
     if (G.banner && G.banner.t > 0) {
-      ctx.fillStyle = 'rgba(20,24,36,0.92)';
-      rr(ctx, VIEW_W / 2 - 260, VIEW_H / 2 - 130, 520, 44, 8); ctx.fill();
-      ctx.fillStyle = PALETTE.gold;
       ctx.font = 'bold 18px ' + FONT;
+      const bw = Math.min(1160, ctx.measureText(G.banner.text).width + 48);
+      ctx.fillStyle = 'rgba(20,24,36,0.92)';
+      rr(ctx, VIEW_W / 2 - bw / 2, VIEW_H / 2 - 130, bw, 44, 8); ctx.fill();
+      ctx.fillStyle = PALETTE.gold;
       ctx.textAlign = 'center';
       ctx.fillText(G.banner.text, VIEW_W / 2, VIEW_H / 2 - 102);
     }
@@ -410,7 +446,7 @@ export function createRenderer(canvas) {
       ctx.fillStyle = `rgba(238,241,245,${Math.min(1, G.districtFlash)})`;
       ctx.font = 'bold 30px ' + FONT;
       ctx.textAlign = 'center';
-      ctx.fillText(districtAt(p.x, p.y).name.toUpperCase(), VIEW_W / 2, 170);
+      ctx.fillText(districtAt(p.x, p.y).name.toUpperCase(), VIEW_W / 2, 205);
     }
     // Controls hint.
     ctx.fillStyle = 'rgba(20,24,36,0.7)';
@@ -437,6 +473,18 @@ export function createRenderer(canvas) {
       ctx.fillStyle = color;
       ctx.beginPath(); ctx.arc(mx + 4 + x * sx, my + 4 + y * sy, r, 0, 7); ctx.fill();
     };
+    // Route line: dashed gold from the player to the mission marker, so
+    // the objective is readable on the minimap at a glance.
+    if (G.mission && G.mission.marker) {
+      ctx.strokeStyle = '#ffd166';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.moveTo(mx + 4 + G.player.x * sx, my + 4 + G.player.y * sy);
+      ctx.lineTo(mx + 4 + G.mission.marker.x * sx, my + 4 + G.mission.marker.y * sy);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
     dot(G.city.spots.safehouse.x, G.city.spots.safehouse.y, '#7ee0a3');
     dot(G.city.spots.garage.x, G.city.spots.garage.y, '#ffd166');
     dot(G.city.spots.gunshop.x, G.city.spots.gunshop.y, '#ff9f43');
@@ -449,7 +497,7 @@ export function createRenderer(canvas) {
     ctx.fillStyle = PALETTE.muted;
     ctx.font = '10px ' + FONT;
     ctx.textAlign = 'left';
-    ctx.fillText('N ↑  ' + districtAt(G.player.x, G.player.y).name, mx + 6, my + mh - 6);
+    ctx.fillText(`N ↑  ${districtAt(G.player.x, G.player.y).name} • standing ${standingFor(G, districtAt(G.player.x, G.player.y).name)}`, mx + 6, my + mh - 6);
   }
 
   function drawTitle(G) {
@@ -483,15 +531,25 @@ export function createRenderer(canvas) {
     ctx.fillStyle = PALETTE.muted;
     ctx.font = '13px ' + FONT;
     ctx.fillText('Press 1 / 2 / 3 to load a slot — or Enter for a new story', VIEW_W / 2, 336);
+    // Chapter strip: three chapters, progress per chapter.
+    ctx.fillStyle = PALETTE.text;
+    ctx.font = 'bold 14px ' + FONT;
+    ctx.fillText('THREE CHAPTERS  •  ' + crewUnlocked(G).map((c) => `${c.name} (${c.role})`).join('  •  ') + (crewUnlocked(G).length ? '' : 'NO CREW YET'), VIEW_W / 2, 356);
+    CHAPTERS.forEach((ch, ci) => {
+      const done = ch.jobs.filter((j) => G.completed[j]).length;
+      ctx.fillStyle = done === 4 ? PALETTE.good : PALETTE.muted;
+      ctx.font = '13px ' + FONT;
+      ctx.fillText(`${ch.title} — ${done}/4`, VIEW_W / 2 - 300 + ci * 300, 378);
+    });
     // Jobs strip.
     ctx.fillStyle = PALETTE.text;
     ctx.font = 'bold 14px ' + FONT;
-    ctx.fillText('TWELVE JOBS', VIEW_W / 2, 380);
+    ctx.fillText('TWELVE JOBS', VIEW_W / 2, 406);
     ctx.font = '13px ' + FONT;
     for (let i = 0; i < 12; i += 1) {
       const info = missionInfo(i);
       const x = 90 + (i % 4) * 290;
-      const y = 404 + Math.floor(i / 4) * 26;
+      const y = 428 + Math.floor(i / 4) * 26;
       ctx.textAlign = 'left';
       ctx.fillStyle = G.completed[i] ? PALETTE.good : PALETTE.text;
       ctx.fillText(`${G.completed[i] ? '✓' : (i + 1) + '.'} ${info.name} — $${info.payout}`, x, y);
@@ -499,11 +557,11 @@ export function createRenderer(canvas) {
     ctx.textAlign = 'center';
     ctx.fillStyle = PALETTE.muted;
     ctx.font = '13px ' + FONT;
-    ctx.fillText('6 districts • 8 cars • 3 guns • 4 radio stations • 5-star SBPD • garage tunes • day into night', VIEW_W / 2, 510);
-    ctx.fillText('WASD drive / walk • E steal car • Click shoot • Space punch • J jobs • B gun shop • G garage • F quick-save', VIEW_W / 2, 534);
+    ctx.fillText('6 districts • district standing • 3 crew • 8 cars • 3 guns • 5 radio stations • 5-star SBPD • garage tunes • day into night', VIEW_W / 2, 534);
+    ctx.fillText('WASD drive / walk • E steal car • Click shoot • Space punch • J jobs • C crew • B gun shop • G garage • F quick-save', VIEW_W / 2, 558);
     ctx.fillStyle = PALETTE.gold;
     ctx.font = 'bold 14px ' + FONT;
-    ctx.fillText('An original open-world crime game. No Rockstar assets, no real places — Solara Bay is ours.', VIEW_W / 2, 566);
+    ctx.fillText('An original open-world crime game. No Rockstar assets, no real places — Solara Bay is ours.', VIEW_W / 2, 590);
   }
 
   function drawJobs(G) {
@@ -512,27 +570,45 @@ export function createRenderer(canvas) {
     ctx.textAlign = 'center';
     ctx.fillStyle = PALETTE.gold;
     ctx.font = 'bold 30px ' + FONT;
-    ctx.fillText('JOBS — PICK YOUR WORK', VIEW_W / 2, 90);
-    for (let i = 0; i < 12; i += 1) {
-      const info = missionInfo(i);
-      const y = 130 + i * 44;
-      ctx.fillStyle = G.completed[i] ? 'rgba(126,224,163,0.15)' : 'rgba(20,24,36,0.9)';
-      rr(ctx, VIEW_W / 2 - 380, y - 24, 760, 38, 6); ctx.fill();
+    ctx.fillText('JOBS — PICK YOUR WORK', VIEW_W / 2, 64);
+    let row = 0;
+    CHAPTERS.forEach((ch, ci) => {
+      const done = ch.jobs.filter((j) => G.completed[j]).length;
+      const yHead = 88 + row * 36;
       ctx.textAlign = 'left';
-      ctx.fillStyle = G.completed[i] ? PALETTE.good : PALETTE.text;
-      ctx.font = 'bold 15px ' + FONT;
-      ctx.fillText(`${i + 1}. ${info.name} — $${info.payout}`, VIEW_W / 2 - 360, y);
+      ctx.fillStyle = PALETTE.gold;
+      ctx.font = 'bold 14px ' + FONT;
+      ctx.fillText(`${ch.title} — ${done}/4`, VIEW_W / 2 - 380, yHead);
       ctx.fillStyle = PALETTE.muted;
-      ctx.font = '13px ' + FONT;
-      ctx.fillText(G.completed[i] ? 'DONE' : info.brief, VIEW_W / 2 - 360, y + 16);
-      ctx.textAlign = 'right';
-      ctx.fillStyle = PALETTE.muted;
-      ctx.fillText(G.completed[i] ? '✓' : 'press ' + (i + 1), VIEW_W / 2 + 360, y);
-    }
+      ctx.font = '12px ' + FONT;
+      ctx.fillText(ch.intro, VIEW_W / 2 - 120, yHead);
+      row += 1;
+      for (const i of ch.jobs) {
+        const info = missionInfo(i);
+        const locked = !isJobUnlocked(G, i);
+        const y = 88 + row * 36;
+        ctx.fillStyle = G.completed[i] ? 'rgba(126,224,163,0.15)' : locked ? 'rgba(20,24,36,0.45)' : 'rgba(20,24,36,0.9)';
+        rr(ctx, VIEW_W / 2 - 380, y - 16, 760, 30, 6); ctx.fill();
+        ctx.textAlign = 'left';
+        ctx.fillStyle = G.completed[i] ? PALETTE.good : locked ? '#5b6474' : PALETTE.text;
+        ctx.font = 'bold 15px ' + FONT;
+        ctx.fillText(`${i + 1}. ${info.name} — $${info.payout}`, VIEW_W / 2 - 360, y);
+        ctx.fillStyle = PALETTE.muted;
+        ctx.font = '13px ' + FONT;
+        ctx.fillText(G.completed[i] ? 'DONE' : locked ? 'LOCKED — finish the earlier jobs first' : info.brief, VIEW_W / 2 - 360, y + 13);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = PALETTE.muted;
+        ctx.fillText(G.completed[i] ? '✓' : locked ? '🔒' : 'press ' + (i + 1), VIEW_W / 2 + 360, y);
+        row += 1;
+      }
+    });
     ctx.textAlign = 'center';
     ctx.fillStyle = PALETTE.muted;
     ctx.font = '13px ' + FONT;
-    ctx.fillText('Press a number to start that job • J or Esc to go back', VIEW_W / 2, 680);
+    const crew = crewUnlocked(G);
+    ctx.fillText(crew.length ? `Crew: ${crew.map((c) => `${c.name} — ${c.role}: ${c.ability}`).join('  •  ')}` : 'Crew: none yet — finish job 1 (Rico Vega), job 2 (Dex Marlowe), job 4 (Mara Solis)', VIEW_W / 2, 648);
+    ctx.fillText(`Standing: ${DISTRICTS.map((d) => `${d.name.split(' ')[0]} ${standingFor(G, d.name)}`).join('  •  ')}`, VIEW_W / 2, 668);
+    ctx.fillText('Press a number to start that job • J or Esc to go back', VIEW_W / 2, 690);
   }
 
   function drawShop(G, kind) {
