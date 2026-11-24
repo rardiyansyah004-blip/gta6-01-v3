@@ -103,6 +103,7 @@ window.__debug = {
     for (const c of G.traffic) { const d = Math.hypot(c.x - G.player.x, c.y - G.player.y); if (d < bd) { bd = d; best = c; } }
     return best ? { d: Math.round(bd), x: Math.round(best.x), y: Math.round(best.y) } : null;
   },
+  hostiles: () => G.hostiles.map((h) => ({ x: Math.round(h.x), y: Math.round(h.y), hp: h.hp, d: Math.round(Math.hypot(h.x - G.player.x, h.y - G.player.y)) })),
   hurt: (n) => { G.player.hurtCd = 0; hurtPlayer(G, n); return G.player.health; },
   state: () => readDebug(),
 };
